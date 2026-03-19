@@ -5,8 +5,13 @@ const userSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true, description: "Unique username for each user" },
   email: { type: String, required: true, unique: true, description: "User's email address" },
   password: { type: String, required: true, description: "User's password stored securely (hashed)" },
-  role: { type: String, enum: ['resident', 'business_owner', 'community_organizer'],
-    default: 'user', description: "Defines user permissions. Allowed values: 'resident', 'business_owner', 'community_organizer'" },
+  role: {
+    type: String,
+    enum: ['resident', 'business_owner', 'community_organizer'],
+    default: 'resident',
+    description:
+      "Defines user permissions. Allowed values: 'resident', 'business_owner', 'community_organizer'",
+  },
   createdAt: { type: Date, default: Date.now, description: "Timestamp for when the user was created" },
 }, { timestamps: true });
 
@@ -26,5 +31,12 @@ userSchema.pre('save', async function (next) {
 userSchema.methods.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
+
+userSchema.set('toJSON', {
+  transform(_doc, ret) {
+    delete ret.password;
+    return ret;
+  },
+});
 
 export default mongoose.model('User', userSchema);

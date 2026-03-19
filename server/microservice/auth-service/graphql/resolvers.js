@@ -1,79 +1,134 @@
 import User from '../models/User.js';
-import bcrypt from 'bcrypt';
-import {config} from '../config/config.js';
 import jwt from 'jsonwebtoken';
+import { config } from '../config/config.js';
 
-const JWT_SECRET = process.env.JWT_SECRET;
+const COOKIE_NAME = 'token';
+const TOKEN_EXPIRES = '1h';
+
+function getTokenFromRequest(req) {
+  const header = req?.headers?.authorization;
+  if (header?.startsWith('Bearer ')) {
+    return header.slice(7).trim();
+  }
+  return req?.cookies?.[COOKIE_NAME] || null;
+}
+
+function userToGraphQL(userDoc) {
+  if (!userDoc) return null;
+  const u = userDoc.toObject ? userDoc.toObject() : { ...userDoc };
+  return {
+    id: String(u._id),
+    username: u.username,
+    email: u.email,
+    role: u.role,
+    createdAt: u.createdAt instanceof Date ? u.createdAt.toISOString() : String(u.createdAt),
+  };
+}
+
+function setAuthCookie(res, token) {
+  if (!res?.cookie) return;
+  res.cookie(COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 60 * 60 * 1000,
+  });
+}
+
+function clearAuthCookie(res) {
+  if (!res?.clearCookie) return;
+  res.clearCookie(COOKIE_NAME, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+  });
+}
 
 export const resolvers = {
-    Query: {
-        currentUser: (_, __, context) => {
-            console.log("🔍 Debugging context:", context);  // ✅ Debugging
-            const { req } = context;
-        
-            if (!req || !req.cookies) {  // ✅ Ensure `req` exists
-            console.log("🚨 Request object is missing!");
-            return null;
-            }
-        
-            const token = req.cookies.token;
-            if (!token) {
-            return null;  // No user is logged in
-            }
-        
-            try {
-            console.log("🔍 JWT_SECRET in resolvers.js:", config.JWT_SECRET);
-            const decoded = jwt.verify(token, config.JWT_SECRET);
-            return { username: decoded.username };
-            } catch (error) {
-            console.error("Error verifying token:", error);
-            return null;
-            }
-        },
-        Users: async () => {
-            try {
-                return await User.find();
-            } catch (error) {
-                console.error('Error fetching users:', error);
-                throw new Error('Failed to fetch users');
-            }
-        }
+  Query: {
+    currentUser: async (_, __, context) => {
+      const { req } = context;
+      const token = getTokenFromRequest(req);
+      if (!token) return null;
+
+      try {
+        const decoded = jwt.verify(token, config.JWT_SECRET);
+        const userId = decoded.userId;
+        if (!userId) return null;
+        const user = await User.findById(userId);
+        return userToGraphQL(user);
+      } catch {
+        return null;
+      }
     },
-    Mutation: {
-        login: async (_, { username, password }) => {
-            try {
-                const user = await User.findOne({ username });
-                if (!user) {
-                    throw new Error('User not found');
-                }
-                const isMatch = await user.comparePassword(password);
-                if (!isMatch) {
-                    throw new Error('Invalid credentials');
-                }
-                const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: '1h' });
-                return { token, user };
-            } catch (error) {
-                console.error('Error during login:', error);
-                throw new Error('Failed to login');
-            }
-        },
-        register: async (_, { username, password, email, role }) => {
-            try {
-                const existingUser = await
-                    User.findOne({ username });
-                if (existingUser) {
-                    throw new Error('Username already exists');
-                }
-                if (email == existingUser.email) {
-                    throw new Error('Email already exists');
-                }
-                const newUser = new User({ username, password, email, role });
-                await newUser.save();
-                return true;
-            } catch (error) {
-                console.error('Error during registration:', error);
-                throw new Error('Failed to register');
-            }
+
+    users: async () => {
+      const docs = await User.find().sort({ createdAt: -1 }).lean();
+      return docs.map((u) => userToGraphQL(u));
+    },
+  },
+  Mutation: {
+    signup: async (_, { username, password, email, role }, context) => {
+      const { res } = context;
+      const existing = await User.findOne({
+        $or: [{ username }, { email: email.toLowerCase() }],
+      });
+      if (existing) {
+        if (existing.username === username) {
+          throw new Error('Username already exists');
         }
-    }
+        throw new Error('Email already exists');
+      }
+
+      const newUser = new User({
+        username,
+        password,
+        email: email.toLowerCase(),
+        ...(role != null && role !== '' ? { role } : {}),
+      });
+      await newUser.save();
+
+      const token = jwt.sign(
+        { userId: String(newUser._id), username: newUser.username },
+        config.JWT_SECRET,
+        { expiresIn: TOKEN_EXPIRES }
+      );
+      setAuthCookie(res, token);
+
+      return {
+        token,
+        user: userToGraphQL(newUser),
+      };
+    },
+
+    login: async (_, { username, password }, context) => {
+      const { res } = context;
+      const user = await User.findOne({ username });
+      if (!user) {
+        throw new Error('Invalid credentials');
+      }
+      const isMatch = await user.comparePassword(password);
+      if (!isMatch) {
+        throw new Error('Invalid credentials');
+      }
+
+      const token = jwt.sign(
+        { userId: String(user._id), username: user.username },
+        config.JWT_SECRET,
+        { expiresIn: TOKEN_EXPIRES }
+      );
+      setAuthCookie(res, token);
+
+      return {
+        token,
+        user: userToGraphQL(user),
+      };
+    },
+
+    logout: async (_, __, context) => {
+      const { res } = context;
+      clearAuthCookie(res);
+      return { success: true, message: 'Logged out' };
+    },
+  },
 };

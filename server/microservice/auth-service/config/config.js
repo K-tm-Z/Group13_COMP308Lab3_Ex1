@@ -7,8 +7,7 @@ export const config = {
   port: process.env.AUTH_PORT || 4001,  // ✅ Correct port for auth-service
 };
 
-// Log in development mode
 if (process.env.NODE_ENV !== 'production') {
-  console.log(`🔐 JWT_SECRET in auth-service config: ${config.JWT_SECRET}`);
-  console.log(`🚀 Auth Microservice running on port: ${config.port}`);
+  const secretOk = Boolean(process.env.JWT_SECRET && process.env.JWT_SECRET !== 'fallback_secret');
+  console.log(`🔐 JWT_SECRET: ${secretOk ? 'set from env' : 'using default (set JWT_SECRET in production)'}`);
 }
