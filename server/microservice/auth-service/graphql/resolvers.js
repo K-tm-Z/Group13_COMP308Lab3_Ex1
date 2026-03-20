@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import User from '../models/User.js';
 import jwt from 'jsonwebtoken';
 import { config } from '../config/config.js';
@@ -64,6 +65,13 @@ export const resolvers = {
 
     users: async () => {
       const docs = await User.find().sort({ createdAt: -1 }).lean();
+      return docs.map((u) => userToGraphQL(u));
+    },
+
+    usersByIds: async (_, { ids }) => {
+      const valid = (ids ?? []).filter((id) => mongoose.Types.ObjectId.isValid(id));
+      if (!valid.length) return [];
+      const docs = await User.find({ _id: { $in: valid } }).lean();
       return docs.map((u) => userToGraphQL(u));
     },
   },

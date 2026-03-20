@@ -19,9 +19,6 @@ const corsOptions = {
     'http://localhost:3000',
     'http://localhost:3001',
     'http://localhost:3002',
-    'http://localhost:5173',
-    'http://localhost:5174',
-    'http://localhost:5175',
     'https://studio.apollographql.com',
   ],
   credentials: true,
@@ -39,7 +36,7 @@ const gateway = new ApolloGateway({
   supergraphSdl: new IntrospectAndCompose({
     subgraphs: [
       { name: 'auth', url: 'http://localhost:4001/graphql' },
-      { name: 'products', url: 'http://localhost:4002/graphql' },
+      { name: 'engage', url: 'http://localhost:4002/graphql' },
     ],
   }),
   buildService({ url }) {

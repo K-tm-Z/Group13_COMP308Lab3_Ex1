@@ -22,6 +22,8 @@ const typeDefs = `#graphql
     currentUser: User
     """Debug / DB inspection only — not for production frontend use."""
     users: [User!]!
+    """Look up users by id (e.g. volunteer ids on help requests)."""
+    usersByIds(ids: [ID!]!): [User!]!
   }
 
   type Mutation {

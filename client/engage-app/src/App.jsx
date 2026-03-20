@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { gql, useMutation, useQuery } from '@apollo/client';
 import Alert from 'react-bootstrap/Alert';
 import Badge from 'react-bootstrap/Badge';
@@ -47,6 +47,15 @@ const HELP_REQUESTS = gql`
       isResolved
       volunteerIds
       createdAt
+    }
+  }
+`;
+
+const USERS_BY_IDS = gql`
+  query EngageVolunteerNames($ids: [ID!]!) {
+    usersByIds(ids: $ids) {
+      id
+      username
     }
   }
 `;
@@ -164,6 +173,32 @@ export default function App() {
     refetch: refetchHelp,
   } = useQuery(HELP_REQUESTS, { fetchPolicy: 'network-only' });
 
+  const helpRequests = helpData?.helpRequests ?? [];
+  const volunteerIdList = useMemo(() => {
+    const s = new Set();
+    helpRequests.forEach((h) => {
+      h.volunteerIds?.forEach((id) => s.add(id));
+    });
+    return Array.from(s);
+  }, [helpRequests]);
+
+  const { data: volunteerUsersData, loading: volunteerNamesLoading } = useQuery(
+    USERS_BY_IDS,
+    {
+      variables: { ids: volunteerIdList },
+      skip: volunteerIdList.length === 0,
+      fetchPolicy: 'cache-and-network',
+    }
+  );
+
+  const usernameById = useMemo(() => {
+    const m = new Map();
+    volunteerUsersData?.usersByIds?.forEach((u) => {
+      m.set(u.id, u.username);
+    });
+    return m;
+  }, [volunteerUsersData]);
+
   const [postTitle, setPostTitle] = useState('');
   const [postContent, setPostContent] = useState('');
   const [postAiSummary, setPostAiSummary] = useState('');
@@ -204,8 +239,6 @@ export default function App() {
     onCompleted: () => refetchHelp(),
     onError: (e) => setFormError(e.message),
   });
-
-  const helpRequests = helpData?.helpRequests ?? [];
 
   return (
     <div className="engage-mfe p-3">
@@ -460,9 +493,17 @@ export default function App() {
                       )}
                       <Card.Text className="small mb-2">
                         Volunteers:{' '}
-                        {h.volunteerIds?.length
-                          ? h.volunteerIds.join(', ')
-                          : '—'}
+                        {!h.volunteerIds?.length
+                          ? '—'
+                          : volunteerNamesLoading
+                            ? '…'
+                            : h.volunteerIds
+                                .map(
+                                  (id) =>
+                                    usernameById.get(id) ??
+                                    id
+                                )
+                                .join(', ')}
                       </Card.Text>
                       <div className="d-flex flex-wrap gap-2">
                         {userId &&

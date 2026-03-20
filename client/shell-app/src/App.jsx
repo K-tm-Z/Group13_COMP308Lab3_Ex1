@@ -4,8 +4,8 @@ import { BrowserRouter, NavLink, Route, Routes } from 'react-router-dom';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './App.css';
 
-const UserApp = lazy(() => import('userApp/App'));
-const EngageApp = lazy(() => import('productApp/App'));
+const AuthApp = lazy(() => import('authApp/App'));
+const EngageApp = lazy(() => import('engageApp/App'));
 
 const ME_QUERY = gql`
   query ShellCurrentUser {
@@ -96,7 +96,7 @@ export default function App() {
           >
             <Routes>
               <Route path="/" element={<Home />} />
-              <Route path="/auth" element={<UserApp />} />
+              <Route path="/auth" element={<AuthApp />} />
               <Route path="/community" element={<EngageApp />} />
             </Routes>
           </Suspense>

@@ -6,8 +6,11 @@ import Card from 'react-bootstrap/Card';
 import Col from 'react-bootstrap/Col';
 import Form from 'react-bootstrap/Form';
 import Row from 'react-bootstrap/Row';
+import Toast from 'react-bootstrap/Toast';
+import ToastContainer from 'react-bootstrap/ToastContainer';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './App.css';
+import { clearAuthToken, setAuthToken } from '@shared/authToken.js';
 
 const ME_QUERY = gql`
   query AuthCurrentUser {
@@ -84,10 +87,14 @@ export default function App() {
   const [signupEmail, setSignupEmail] = useState('');
   const [signupRole, setSignupRole] = useState('resident');
   const [errorMessage, setErrorMessage] = useState(null);
+  const [successMessage, setSuccessMessage] = useState(null);
 
   const [login, { loading: loginLoading }] = useMutation(LOGIN_MUTATION, {
-    onCompleted: () => {
+    onCompleted: (data) => {
+      const token = data?.login?.token;
+      if (token) setAuthToken(token);
       setErrorMessage(null);
+      setSuccessMessage('Signed in successfully.');
       refetch();
       emitAuthChanged();
     },
@@ -95,8 +102,11 @@ export default function App() {
   });
 
   const [signup, { loading: signupLoading }] = useMutation(SIGNUP_MUTATION, {
-    onCompleted: () => {
+    onCompleted: (data) => {
+      const token = data?.signup?.token;
+      if (token) setAuthToken(token);
       setErrorMessage(null);
+      setSuccessMessage('Account created. You are signed in.');
       refetch();
       emitAuthChanged();
     },
@@ -105,7 +115,9 @@ export default function App() {
 
   const [logout, { loading: logoutLoading }] = useMutation(LOGOUT_MUTATION, {
     onCompleted: () => {
+      clearAuthToken();
       setErrorMessage(null);
+      setSuccessMessage('Signed out successfully.');
       refetch();
       emitAuthChanged();
     },
@@ -124,6 +136,25 @@ export default function App() {
 
   return (
     <div className="auth-mfe p-3">
+      <ToastContainer
+        position="top-end"
+        className="p-3 position-fixed"
+        style={{ zIndex: 1080 }}
+      >
+        <Toast
+          bg="success"
+          show={successMessage != null}
+          onClose={() => setSuccessMessage(null)}
+          delay={4500}
+          autohide
+        >
+          <Toast.Header closeButton closeVariant="white" className="text-white border-0">
+            <strong className="me-auto">Success</strong>
+          </Toast.Header>
+          <Toast.Body className="text-white">{successMessage}</Toast.Body>
+        </Toast>
+      </ToastContainer>
+
       <h4 className="mb-3">Authentication</h4>
       {errorMessage && (
         <Alert variant="danger" dismissible onClose={() => setErrorMessage(null)}>
@@ -265,8 +296,10 @@ export default function App() {
       <p className="text-muted small mt-3 mb-0">
         Uses the API gateway at{' '}
         <code>{import.meta.env.VITE_GRAPHQL_URL || 'http://localhost:4000/graphql'}</code>
-        . Session cookie is httpOnly; log in here before creating posts or help
-        requests in Community.
+        . The session token is stored in this browser (JWT in{' '}
+        <code>Authorization</code> after sign-in) so sign-in works across ports in
+        development. Log in here before creating posts or help requests in
+        Community.
       </p>
     </div>
   );

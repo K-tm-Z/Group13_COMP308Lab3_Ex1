@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { ApolloServer } from '@apollo/server';
+import { buildSubgraphSchema } from '@apollo/subgraph';
+import { parse } from 'graphql';
 import { expressMiddleware } from '@as-integrations/express4';
 import connectDB from './config/mongoose.js';
 import { config } from './config/config.js';
@@ -21,9 +23,10 @@ app.use(
 app.use(express.json());
 app.use(cookieParser());
 
+const schema = buildSubgraphSchema({ typeDefs: parse(typeDefs), resolvers });
+
 const apolloServer = new ApolloServer({
-  typeDefs,
-  resolvers,
+  schema,
 });
 
 await apolloServer.start();
